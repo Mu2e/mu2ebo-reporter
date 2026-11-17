@@ -11,7 +11,7 @@ from pathlib import Path
 import anyio
 
 from mu2ebo_reporter import __version__, config, facts as facts_mod
-from mu2ebo_reporter.check import check, render
+from mu2ebo_reporter.check import check, model_text, render
 from mu2ebo_reporter.hub import ToolHub
 
 
@@ -50,7 +50,7 @@ async def _facts(a, specs, errlog):
 
 async def _report(a, specs, out: Path, errlog) -> int:
     from openai import OpenAI
-    from mu2ebo_reporter.agent import write_report
+    from mu2ebo_reporter.agent import join_report, write_report_parts
 
     base_url, model, key_env, label = config.resolve_endpoint(a.endpoint, a.base_url, a.model)
     if not model:
@@ -75,10 +75,11 @@ async def _report(a, specs, out: Path, errlog) -> int:
         trace({"event": "facts", "keys": sorted(f), "errors": f["errors"]})
         if f["errors"]:
             print(f"mu2ebo-report: tool errors while collecting facts: {list(f['errors'])}", file=sys.stderr)
-        report, usage = await write_report(hub, client, model, {**facts_mod.compact(f), "provenance": f["provenance"]}, a.max_turns,
-                                           a.temperature, trace)
+        body, prov, usage = await write_report_parts(hub, client, model, {**facts_mod.compact(f), "provenance": f["provenance"]},
+                                                     a.max_turns, a.temperature, trace)
+        report = join_report(body, prov)
         (out / "report.md").write_text(report + "\n")
-        result = check(report, f)
+        result = check(body, f)  # the model's text only: the Provenance section names the model id (gpt-oss:120b)
         (out / "check.json").write_text(json.dumps(result, indent=1))
         (out / "check.txt").write_text(render(result) + "\n")
         run.update(usage=usage, check_ok=result["ok"], unsupported=len(result["unsupported"]))
@@ -145,7 +146,7 @@ def main(argv: list[str] | None = None) -> int:
         print("\n" + prompt("report.md").split("FACTS:")[0].replace("{prefix}", "<prefix>").replace("{study}", "<study>"))
         return 0
     if a.cmd == "check":
-        res = check(a.report.read_text(), json.loads(a.facts.read_text()))
+        res = check(model_text(a.report.read_text()), json.loads(a.facts.read_text()))
         print(render(res))
         return 0 if res["ok"] else 1
     a.data_root = (a.data_root or config.default_data_root()).resolve()

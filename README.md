@@ -29,8 +29,10 @@ memory  (aitools registry, HTTP)   ─┘   3. check: every number must appear i
 - **Provenance comes from the program.** The `## Provenance` section is appended from the actual calls, not written
   by the model.
 - **The number check** (`mu2ebo_reporter/check.py`) flags any number in the report that no tool output contains.
-  Numbers on lines citing DocDB are listed separately for a manual look. The check cannot see wrong *claims* that
-  carry no new number, such as a document's conclusion transferred to the campaign, so read the report.
+  A difference, ratio or percentage of two supported numbers is accepted when both inputs are on the same line and it
+  agrees to its printed precision (listed as `derived` in `check.txt`). The Provenance section the program appends is
+  not checked. Numbers on lines citing DocDB are listed separately for a manual look. The check cannot see wrong
+  *claims* that carry no new number, such as a document's conclusion transferred to the campaign, so read the report.
 
 ## Install
 
