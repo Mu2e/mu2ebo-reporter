@@ -1,4 +1,5 @@
-"""Flag every number in a report that no tool output contains."""
+"""Flag every number in a report that no tool output contains, and every
+claim that a campaign found the optimum."""
 from __future__ import annotations
 
 import json
@@ -17,6 +18,9 @@ IGNORE = re.compile(r"\b[A-Za-z]+\d+R\d+_\d+\b"            # config names
                     r"|/[\w./-]+"                           # paths
                     r"|\b[A-Za-z]+_\d+\b")                  # knob names like rOut_0
 DOCREF = re.compile(r"DocDB|docdb")
+# A campaign only shows the best design measured so far; no tool returns an
+# optimum, and identical campaigns have ended 7 points of sob apart.
+OPTIMUM = re.compile(r"\b(?:global(?:ly)?|true|absolute)\s+optim(?:um|a|al)\b", re.IGNORECASE)
 
 
 def norm(text: str) -> str:
@@ -59,9 +63,10 @@ def check(report: str, facts: Any) -> dict[str, Any]:
     known = known_numbers(facts, [])
     logs = [-math.log10(k) for k in known if k > 0]  # the surrogate's -log10 objective axes
     known += [-k for k in known] + [100 * k for k in known] + logs
-    unsupported, docdb, n, scale = [], [], 0, 0
+    unsupported, docdb, claims, n, scale = [], [], [], 0, 0
     for raw in report.splitlines():
         line = norm(raw)
+        claims += [{"phrase": m.group(0), "line": raw.strip()[:200]} for m in OPTIMUM.finditer(line)]
         table = line.lstrip().startswith("|")
         if table and SCALE.search(line) and HDR_SCALE.search(line):
             scale = int(SCALE.search(line).group(1))
@@ -77,12 +82,14 @@ def check(report: str, facts: Any) -> dict[str, Any]:
                 continue
             (docdb if DOCREF.search(line) else unsupported).append({"value": tok, "line": raw.strip()[:200]})
     return {"numbers_checked": n, "unsupported": unsupported, "docdb_lines": docdb,
-            "ok": not unsupported}
+            "optimum_claims": claims, "ok": not unsupported and not claims}
 
 
 def render(result: dict[str, Any]) -> str:
     lines = [f"numbers checked: {result['numbers_checked']}  unsupported: {len(result['unsupported'])}  "
-             f"on DocDB lines (verify by hand): {len(result['docdb_lines'])}"]
+             f"on DocDB lines (verify by hand): {len(result['docdb_lines'])}  "
+             f"optimum claims: {len(result['optimum_claims'])}"]
     lines += [f"  UNSUPPORTED {u['value']!r}: {u['line']}" for u in result["unsupported"]]
+    lines += [f"  OPTIMUM CLAIM {c['phrase']!r}: {c['line']}" for c in result["optimum_claims"]]
     lines += [f"  DOCDB {u['value']!r}: {u['line']}" for u in result["docdb_lines"]]
     return "\n".join(lines)
