@@ -21,6 +21,8 @@ DOCREF = re.compile(r"DocDB|docdb")
 # A campaign only shows the best design measured so far; no tool returns an
 # optimum, and identical campaigns have ended 7 points of sob apart.
 OPTIMUM = re.compile(r"\b(?:global(?:ly)?|true|absolute)\s+optim(?:um|a|al)\b", re.IGNORECASE)
+# A sentence that denies the claim ("not necessarily the global optimum") is the caveat we want.
+DENIED = re.compile(r"\b(?:not|no|never|cannot|without|neither|nor)\b|n't", re.IGNORECASE)
 
 
 def norm(text: str) -> str:
@@ -66,7 +68,9 @@ def check(report: str, facts: Any) -> dict[str, Any]:
     unsupported, docdb, claims, n, scale = [], [], [], 0, 0
     for raw in report.splitlines():
         line = norm(raw)
-        claims += [{"phrase": m.group(0), "line": raw.strip()[:200]} for m in OPTIMUM.finditer(line)]
+        for sentence in re.split(r"(?<=[.!?;])\s+", line):
+            if not DENIED.search(sentence):
+                claims += [{"phrase": m.group(0), "line": raw.strip()[:200]} for m in OPTIMUM.finditer(sentence)]
         table = line.lstrip().startswith("|")
         if table and SCALE.search(line) and HDR_SCALE.search(line):
             scale = int(SCALE.search(line).group(1))
