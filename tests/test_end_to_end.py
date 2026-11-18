@@ -8,8 +8,8 @@ import anyio
 import pytest
 
 from mu2ebo_reporter import facts as facts_mod
-from mu2ebo_reporter.agent import write_report
-from mu2ebo_reporter.check import check
+from mu2ebo_reporter.agent import join_report, write_report, write_report_parts
+from mu2ebo_reporter.check import check, model_text
 from mu2ebo_reporter.config import AUTORESEARCH_TOOLS, SURROGATE_TOOLS, ServerSpec
 from mu2ebo_reporter.hub import ToolHub
 
@@ -71,6 +71,23 @@ def test_facts_report_and_check(tmp_path):
     assert llm.calls[1]["messages"][-1]["role"] == "tool"
     assert check(report, f)["ok"]
     assert not check(report + " Correlation 0.89.", f)["ok"]
+
+
+def test_provenance_not_checked(tmp_path):
+    """A model id with a number >= 10 (gpt-oss:120b) sits in the Provenance section, not in the facts."""
+    good = "Best tq01R01_00: sob 1.41513, edep 7.58519e-06."
+
+    async def go():
+        async with ToolHub(specs(), sys.stderr) as hub:
+            f = await facts_mod.collect(hub, "tq01", "toy", tmp_path, ())
+            parts = await write_report_parts(hub, StubLLM(good), "gpt-oss:120b", facts_mod.compact(f), 4, 0.0,
+                                             lambda e: None)
+            return f, parts
+    f, (body, prov, _) = run(go)
+    report = join_report(body, prov)
+    assert body == good and "`gpt-oss:120b`" in prov and report.startswith(good) and report.endswith(prov)
+    assert check(body, f)["ok"] and check(model_text(report), f)["ok"] and model_text(report) == body
+    assert "120" in [u["value"] for u in check(report, f)["unsupported"]]  # what v00_01_00 checked
 
 
 def test_turn_limit():

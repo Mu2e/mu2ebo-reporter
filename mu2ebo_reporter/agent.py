@@ -29,6 +29,18 @@ def prompt(name: str) -> str:
 
 async def write_report(hub: ToolHub, client: OpenAI, model: str, facts: dict[str, Any],
                        max_turns: int, temperature: float, trace: Callable[[dict], None]) -> tuple[str, dict]:
+    """The full report: the model's text with the program's Provenance section appended."""
+    body, prov, usage = await write_report_parts(hub, client, model, facts, max_turns, temperature, trace)
+    return join_report(body, prov), usage
+
+
+def join_report(body: str, prov: str) -> str:
+    return body + "\n\n" + prov  # check.model_text() undoes this
+
+
+async def write_report_parts(hub: ToolHub, client: OpenAI, model: str, facts: dict[str, Any], max_turns: int,
+                             temperature: float, trace: Callable[[dict], None]) -> tuple[str, str, dict]:
+    """(model text, Provenance section, usage). Only the model text goes through the number check."""
     messages: list[dict[str, Any]] = [
         {"role": "system", "content": prompt("system.md")},
         {"role": "user", "content": prompt("report.md").format(
@@ -50,7 +62,7 @@ async def write_report(hub: ToolHub, client: OpenAI, model: str, facts: dict[str
         trace({"event": "llm", "turn": turn, "seconds": round(time.time() - t0, 2),
                "tool_calls": [c.function.name for c in calls], "usage": resp.usage.model_dump() if resp.usage else None})
         if not calls:
-            return (msg.content or "").strip() + "\n\n" + provenance(facts, model, model_calls), usage
+            return (msg.content or "").strip(), provenance(facts, model, model_calls), usage
         messages.append({"role": "assistant", "content": msg.content or "",
                          "tool_calls": [{"id": c.id, "type": "function",
                                          "function": {"name": c.function.name, "arguments": c.function.arguments}}

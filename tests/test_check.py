@@ -1,4 +1,4 @@
-from mu2ebo_reporter.check import check
+from mu2ebo_reporter.check import check, model_text
 
 FACTS = {"board": {"rows": [{"config": "bpzq01R26_00", "values": {"sob": 1.41513, "flash_edep": 7.58519e-06}}]},
          "kb": "S/sqrt(B) 4.15 vs 3.26, rad. damage 1.10\u00d710\u22126"}
@@ -35,3 +35,28 @@ def test_spaced_exponent_and_log_axis():
 
 def test_narrow_nbsp_before_exponent():
     assert check("flash_edep = 7.58519\u202fe\u201106", FACTS)["ok"]
+
+
+DERIV = {"counts": {"scored": 10, "total": 22}, "sob": [1.41513, 1.31]}
+
+
+def test_derived_ratio_and_percent_change_accepted():
+    r = check("10 of 22 children scored (10 / 22 \u2248 45 %).\nsob 1.415 vs 1.31 (~7.4 % lower).", DERIV)
+    assert r["ok"], r
+    assert [(d["value"], d["from"]) for d in r["derived"]] == [("45", "100 * 10 / 22"),
+                                                               ("7.4", "100 * (1.31 - 1.415) / 1.415")]
+
+
+def test_invented_number_next_to_inputs_rejected():
+    r = check("sob 1.41513 vs 1.31, a 45 % gain and correlation 0.37.\n10 / 22 \u2248 45 configs.", DERIV)
+    assert [u["value"] for u in r["unsupported"]] == ["45", "0.37", "45"] and not r["derived"]
+
+
+def test_derived_needs_inputs_on_same_line():
+    assert not check("10 of 22 children scored.\nThat is 45 %.", DERIV)["ok"]
+
+
+def test_model_text_drops_program_provenance():
+    body = "Best: sob 1.41513."
+    report = body + "\n\n## Provenance\n\n- Data root: `/x` (snapshot time unknown)\n- Model: `gpt-oss:120b`; ..."
+    assert model_text(report) == body and check(model_text(report), FACTS)["ok"] and not check(report, FACTS)["ok"]
