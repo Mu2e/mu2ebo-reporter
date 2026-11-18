@@ -35,3 +35,21 @@ def test_spaced_exponent_and_log_axis():
 
 def test_narrow_nbsp_before_exponent():
     assert check("flash_edep = 7.58519\u202fe\u201106", FACTS)["ok"]
+
+
+def test_optimum_claim_flagged():
+    r = check("The loop identified the global optimum: bpzq01R26_00.", FACTS)
+    assert not r["ok"] and [c["phrase"] for c in r["optimum_claims"]] == ["global optimum"]
+
+
+def test_best_measured_is_fine():
+    r = check("Best measured so far: bpzq01R26_00 (sob = 1.41513); optimization continues.", FACTS)
+    assert r["ok"] and r["optimum_claims"] == [], r
+
+
+def test_denying_the_optimum_is_fine():
+    for text in ("This is not necessarily the global optimum.", "A global optimum cannot be claimed.",
+                 "The best measured point may not be the true optimum; more points are needed."):
+        assert check(text, FACTS)["ok"], text
+    r = check("No row failed. The loop found the global optimum.", FACTS)
+    assert not r["ok"]

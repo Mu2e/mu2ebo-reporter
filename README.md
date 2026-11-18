@@ -18,7 +18,8 @@ the Fermilab vLLM server the aitools harness uses. See [Using it from an agent h
 Mu2eBO service/server.py   (stdio) ─┐
 Mu2eBO surrogate/mcp_server.py (stdio) ─┤   1. facts: fixed read-only calls  ──> facts.json
 kb      (aitools registry, HTTP)   ─┤   2. LLM writes the report (may call the read-only tools)
-memory  (aitools registry, HTTP)   ─┘   3. check: every number must appear in the facts ──> check.txt
+memory  (aitools registry, HTTP)   ─┘   3. check: every number must appear in the facts,
+                                           and no "global optimum" claim ──> check.txt
                                         4. optional write-back to memory, only if the check passed
 ```
 
@@ -101,7 +102,7 @@ Output in `<data-root>/reports/<prefix>/<UTC>/` (or `--out`):
 |---|---|
 | `report.md` | the report |
 | `facts.json` | every deterministic tool output the report is checked against |
-| `check.txt`, `check.json` | the number check; exit code 1 if any number is unsupported |
+| `check.txt`, `check.json` | the number check and the optimum-claim check; exit code 1 if any number is unsupported or the report claims a global, true or absolute optimum |
 | `trace.jsonl` | one line per LLM turn and tool call (timing, token usage) |
 | `run.json` | model, endpoint, servers (keys redacted), token totals, write-back result |
 
